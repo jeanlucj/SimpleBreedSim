@@ -1,0 +1,208 @@
+
+#' selectParents function
+#'
+#' Function to select which breeding population individuals to use as parents
+#' to advance the population
+#'
+#' @param nToSelect The number of IDs to return that have the highest BLUPs
+#' @param bsd The breeding scheme data list
+#' @return List with entries vector of variety IDs selected and updated bsd
+#' @details Accesses all data in phenoRecords to pick the highest among
+#' candidates with enough seed inventory.
+#'
+#' @examples
+#' optCont <- selectParents(nToSelect, bsd)]
+#'
+#' @export
+selectParents <- function(nToSelect, bsd){
+  # Get GEBVs
+  gebv <- grmPhenoEval(bsd)
+  # Keep only breeding population
+  gebv <- gebv[names(gebv), bsd$varietyCandidates$id]
+  # Set up to use optiSel
+  # 1. data.frame with a column named "Indiv" that has individual ids,
+  # and a column named however you want with the selection criterion.
+  # Here, the column is named "gebv".
+  phen <- data.frame(Indiv=names(gebv), gebv=gebv)
+  # 2. Need to have a coefficient of coancestry matrix
+  pedigree <- tibble(id=bsd$breedingPop@id,
+                     dam=bsd$breedingPop@mother, sire=bsd$breedingPop@father)
+  pedigree <- convertNamesToRows(pedigree)
+  ccMat <- pedigreeToCCmatrix(pedigree)
+  # 3. the function `candes` checks that all is well.
+  invisible(capture.output(cand <- optiSel::candes(phen, ccMat=ccMat, quiet=T)))
+  # 4. The constraint. Here, I give it a change of inbreeding using the
+  # optiContEffPop parameter in bsd
+  # The constraint should be `ub.name`, where `name` is the name of the
+  # cc matrix given above
+  deltaF <- 1 / (2 * bsd$optiContEffPop)
+  con <- list(
+    ub.ccMat = deltaF + (1 - deltaF)*cand$mean$ccMat
+  )
+  # 5. `oc` has the optimal contributions for each individual. A number of them
+  # will be close to zero and should be explicitly set to zero (see keep below)
+  oc <- optiSel::opticont("max.gebv", cand, con, quiet=T, trace=F)
+  oc <- oc$parent[, c("Indiv", "oc")]
+  # Keep lines to that have a chance to be a parent once
+  keep <- which(oc$oc > 1 / (2*bsd$nBreedPopProg))
+  oc <- oc[keep,]
+  oc$oc <- oc$oc / sum(oc$oc)
+  return(oc)
+}
+
+#' makeCrosses function
+#'
+#' Function to make crosses to get the next generation of breeding progeny
+#' @param optCont Data.frame of optimal contributions coming from selectParents
+#' @param bsd List of breeding program data
+#'
+#' @return Updated bsd with new S0 progeny in breedingPop
+#' @details Takes the optimal contributions and generates random mating with
+#' the correct number of progeny per parent. Self-fertilization is possible.
+#' @examples
+#' bsd <- makeCrosses(optCont, bsd)]
+#'
+#' @export
+makeCrosses <- function(optCont, bsd){
+  nParents <- nrow(optCont)
+  nProgeny <- bsd$nBreedPopProg
+  probs <- optCont$oc
+  ids <- optCont$Indiv
+  if (abs(1 - sum(probs)) > 1e-9) stop("Crossing probabilites must sum to 1")
+  # Two parents per progeny
+  parIdx <- round(cumsum(2*nProgeny*probs))
+  nEachPar <- diff(c(0, parIdx))
+  parVec <- unlist(lapply(1:nParents, function(par) ids[rep(par, nEachPar[par])]))
+  crossPlan <- matrix(sample(parVec), ncol=2)
+  newBreedProg <- AlphaSimR::makeCross(bsd$breedingPop,
+                                       crossPlan, simParam=bsd$SP)
+  bsd$breedingPop <- c(bsd$breedingPop, newBreedProg)
+  return(bsd)
+}
+
+#' pedigreeToCCmatrix function
+#'
+#' Function to calculate a coefficient of coancestry matrix from a three-
+#' column pedigree matrix:
+#' The first column has to be the row number
+#' Sire and dam columns refer directly to rows
+#' Unknown parents need to be set to 0 (zero)
+#'
+#' @param threeColPed The pedigree matrix
+#' @return Matrix with coefficients of coancestry
+#' @details Uses the breedingPop data in bsd
+#'
+#' @examples
+#' ccMat <- pedigreeToCCmatrix(threeColPed)]
+#'
+#' @export
+pedigreeToCCmatrix <- function(threeColPed){
+  nInd <- nrow(threeColPed)
+  ccMat <- matrix(0, nInd, nInd)
+  # the very first individual in the pedigree has to be a founder
+  ccMat[1, 1] <- 0.5
+  for (prog in 2:nInd){
+    sire <- threeColPed[prog, 2]
+    dam <- threeColPed[prog, 3]
+    prog_1 <- prog - 1
+    if (sire){
+      sireRow <- ccMat[sire, 1:prog_1]
+    } else{
+      sireRow <- rep(0, prog_1)
+    }
+    if (dam){
+      damRow <- ccMat[dam, 1:prog_1]
+    } else{
+      damRow <- rep(0, prog_1)
+    }
+    ccMat[prog, 1:prog_1] <- ccMat[1:prog_1, prog] <- (sireRow + damRow) / 2
+    ccSelf <- 0.5
+    if (sire > 0 & dam > 0) ccSelf <- ccSelf + ccMat[sire, dam] / 2
+    ccMat[prog, prog] <- ccSelf
+  }
+  rownames(ccMat) <- colnames(ccMat) <- 1:nInd
+  return(ccMat)
+}
+
+#' convertNamesToRows function
+#'
+#' Function to transform arbitrary name IDs to row numbers for the sake of
+#' pedigreeToCCmatrix
+#'
+#' @param nameMat The pedigree matrix with character IDs
+#' @return Matrix suitable for pedigreeToCCmatrix
+#' @details Keeps everything in order
+#'
+#' @examples
+#' threeColPed <- convertNamesToRows(nameMat)]
+#'
+#' @export
+convertNamesToRows <- function(nameMat){
+  nameToRow <- 1:nrow(nameMat)
+  names(nameToRow) <- nameMat[,1]
+  parVecToRow <- function(parVec){
+    rowID <- integer(length(parVec))
+    rowID[parVec != "0"] <- nameToRow[parVec[parVec != "0"]]
+    return(rowID)
+  }
+  return(cbind(nameToRow, parVecToRow(nameMat[,2]), parVecToRow(nameMat[,3])))
+}
+
+#' calcGRM function
+#'
+#' Function to make a genomic relationship matrix to calculat GEBVs
+#'
+#' @param bsd List of breeding scheme data
+#' @param SP The AlphaSimR SimParam object. Needed to pull the SNP genotypes
+#' @return A genomic relationship matrix
+#' @details bsd contains both variety candidates that have phenotypes and
+#' breeding population individuals that don't.  Both need to be in the GRM
+#' for prediction
+#'
+#' @examples
+#' grm <- calcGRM(bsd)
+#'
+#' @export
+calcGRM <- function(bsd){
+  require(sommer)
+  allPop <- c(bsd$breedingPop, bsd$varietyCandidates)
+  return(sommer::A.mat(AlphaSimR::pullSnpGeno(allPop, simParam=bsd$SP) - 1))
+}
+
+#' grmPhenoEval function
+#'
+#' Takes phenotypes from phenoRecords and combines them with the GRM across
+#' variety candidates and breeding population individuals
+#'
+#' @param bsd List of breeding scheme data
+#' @return Named real vector of the GEBVs (names are the individual ids) of all
+#' individuals including breeding population and variety candidates,
+#' with appropriate weights by error variance of the observations
+#' @details Given all the phenotypic records calculate the GEBV
+#'
+#' @examples
+#' grmBLUPs <- grmPhenoEval(bsd)
+#'
+#' @export
+grmPhenoEval <- function(bsd){
+  require(sommer)
+  grm <- calcGRM(bsd)
+  phenoDF <- bsd$phenoRecords
+  phenoDF <- phenoDF %>% dplyr::mutate(wgt=1/errVar)
+  phenoDF$id <- factor(phenoDF$id, levels=rownames(grm)) # Enable prediction
+  fm <- sommer::mmer(pheno ~ 1,
+             random= ~ vs(id, Gu=grm),
+             method="EMMA",
+             rcov= ~ units,
+             weights=wgt,
+             data=phenoDF,
+             verbose=F,
+             date.warning=F)
+  blup <- fm$U[[1]][[1]]
+  # Ensure output has variation: needed for optimal contributions
+  if (sd(blup) == 0){ # In this case, random selection
+    whoNeedsVar <- setdiff(names(blup), bsd$varietyCandidates)
+    blup[whoNeedsVar] <- runif(length(whoNeedsVar))
+  }
+  return(blup)
+}
