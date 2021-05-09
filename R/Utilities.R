@@ -45,7 +45,7 @@ initializeProgram <- function(founderFile, schemeFile){
   # Read parameters about trial types
   parmNames <- c("nStages", "stageNames", "nReps", "nLocs", "errVars",
                  "seedNeeded", "seedProduced", "optiContEffPop",
-                 "nBreedPopProg", "nStartVarietyCand")
+                 "nBreedingPopProg", "nStartVarietyCand")
   bsdNew <- readControlFile(schemeFile, parmNames)
   bsd <- c(bsd, bsdNew)
 

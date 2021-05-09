@@ -31,7 +31,7 @@ optiContEffPop
 20
 
 # Number of breeding population progeny each cycle
-nBreedPopProg
+nBreedingPopProg
 400
 
 # Number of breeding population progeny each cycle

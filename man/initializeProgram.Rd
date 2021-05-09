@@ -20,9 +20,9 @@ an empty pop for variety candidates, phenoRecords an empty tibble for
 phenotype records, and inventory an empty tibble for variety candidates
 }
 \description{
-Function to initialize the simulation
-Read the founder genetic architecture and population genetic parameters
-Create simulation data structures
+Function to initialize the simulation.
+Read the founder genetic architecture and population genetic parameters.
+Create simulation data structures.
 }
 \details{
 Call this function at the beginning of the simulation

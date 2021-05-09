@@ -45,7 +45,7 @@ selectParents <- function(nToSelect, bsd){
   oc <- optiSel::opticont("max.gebv", cand, con, quiet=T, trace=F)
   oc <- oc$parent[, c("Indiv", "oc")]
   # Keep lines to that have a chance to be a parent once
-  keep <- which(oc$oc > 1 / (2*bsd$nBreedPopProg))
+  keep <- which(oc$oc > 1 / (2*bsd$nBreedingPopProg))
   oc <- oc[keep,]
   oc$oc <- oc$oc / sum(oc$oc)
   return(oc)
@@ -66,7 +66,7 @@ selectParents <- function(nToSelect, bsd){
 #' @export
 makeCrosses <- function(optCont, bsd){
   nParents <- nrow(optCont)
-  nProgeny <- bsd$nBreedPopProg
+  nProgeny <- bsd$nBreedingPopProg
   probs <- optCont$oc
   ids <- optCont$Indiv
   if (abs(1 - sum(probs)) > 1e-9) stop("Crossing probabilites must sum to 1")

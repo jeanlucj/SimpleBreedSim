@@ -12,15 +12,16 @@ selectParents(nToSelect, bsd)
 \item{bsd}{The breeding scheme data list}
 }
 \value{
-List with entries vector of variety IDs selected and updated bsd
+Data.frame with pedigree ccMat-based optimal contributions
 }
 \description{
 Function to select which breeding population individuals to use as parents
 to advance the population
 }
 \details{
-Accesses all data in phenoRecords to pick the highest among
-candidates with enough seed inventory.
+Accesses phenoRecords to predict GEBVs among breeding population
+then calculates optimal contributions with those GEBVs and a pedigree-based
+coefficient of coancestry matrix.
 }
 \examples{
 optCont <- selectParents(nToSelect, bsd)]

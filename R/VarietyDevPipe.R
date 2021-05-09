@@ -85,16 +85,16 @@ choseTrialEntries <- function(trialType, nToSelect, bsd){
 #'
 #' @export
 makeVarietyCandidates <- function(bsd){
-  nBP <- nInd(bsd$breedingPop)
-  lastGen <- nBP - (bsd$nBreedPopProg-1):0
+  nBP <- AlphaSimR::nInd(bsd$breedingPop)
+  lastGen <- nBP - (bsd$nBreedingPopProg-1):0
   lastGenBreedProg <- bsd$breedingPop[lastGen]
   nDH <- bsd$nStartVarietyCand %/% bsd$nBreedingPopProg
-  newVarCand <- makeDH(lastGenBreedProg, nDH=nDH, SP=bsd$SP)
+  newVarCand <- makeDH(lastGenBreedProg, nDH=nDH, simParam=bsd$SP)
   if (bsd$nStartVarietyCand %% bsd$nBreedingPopProg > 0){
     nExtra <- bsd$nStartVarietyCand %% bsd$nBreedingPopProg
-    whichPar <- sample(bsd$nBreedPopProg, nExtra)
+    whichPar <- sample(bsd$nBreedingPopProg, nExtra)
     newVarCand <- c(newVarCand,
-                    makeDH(lastGenBreedProg[whichPar], nDH=1, SP=bsd$SP)
+                    makeDH(lastGenBreedProg[whichPar], nDH=1, simParam=bsd$SP)
     )
   }
   bsd$varietyCandidates <- c(bsd$varietyCandidates, newVarCand)
