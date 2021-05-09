@@ -1,8 +1,8 @@
 #' initializeProgram function
 #'
-#' Function to initialize the simulation
-#' Read the founder genetic architecture and population genetic parameters
-#' Create simulation data structures
+#' Function to initialize the simulation.
+#' Read the founder genetic architecture and population genetic parameters.
+#' Create simulation data structures.
 #'
 #' @param founderFile String name of the text file with parameters governing
 #' the founders and the genetic architecture
@@ -21,7 +21,7 @@
 #' @export
 initializeProgram <- function(founderFile, schemeFile){
   # Read parameters to create founders
-  parmNames <- c("nChr", "nFounders", "effPopSize", "quickHaplo", "segSites", "nQTL", "nSNP", "genVar", "gxeVar", "gxyVar", "gxlVar", "gxyxlVar", "meanDD", "varDD", "relAA")
+  parmNames <- c("nChr", "nFounders", "effPopSize", "quickHaplo", "segSites", "nQTL", "nSNP", "genVar", "gxeVar", "gxyVar", "gxlVar", "gxyxlVar", "meanDD", "varDD", "relAA", "quickHaplo")
   bsd <- readControlFile(founderFile, parmNames)
 
   # Create haplotypes for founder population of outbred individuals
@@ -40,17 +40,19 @@ initializeProgram <- function(founderFile, schemeFile){
   SP$addSnpChip(bsd$nSNP)
 
   # Create the founders
-  breedingPop <- newPop(founderHap, simParam=SP)
+  bsd$breedingPop <- AlphaSimR::newPop(founderHap, simParam=SP)
 
   # Read parameters about trial types
-  parmNames <- c("nStages", "stageNames", "nReps", "nLocs", "errVars", "minInventory", "inventoryOut")
+  parmNames <- c("nStages", "stageNames", "nReps", "nLocs", "errVars",
+                 "seedNeeded", "seedProduced", "optiContEffPop",
+                 "nBreedPopProg", "nStartVarietyCand")
   bsdNew <- readControlFile(schemeFile, parmNames)
   bsd <- c(bsd, bsdNew)
 
   # Add miscelaneous data structures
   bsd$year <- 0
   bsd$nextTrialID <- 1
-
+  bsd <- calcDerivedParms(bsd)
   return(bsd)
 }
 
@@ -86,4 +88,69 @@ readControlFile <- function(fileName, parmNames){
   parms <- lapply(parmNames, getParm)
   names(parms) <- parmNames
   return(parms)
+}
+
+#' calcDerivedParms function
+#'
+#' Once you have read in parameters from a control file, or set them yourself, there are still a few derived parameters that are needed.  This function calculates them.
+#'
+#' @param bsd List of breeding program data
+#' @return A list bsd that extends the input with a few derived parameters
+#'
+#' @details This function is only called internally by other functions used to specify the pipeline
+#'
+calcDerivedParms <- function(bsd){
+  # Function to check if a parameter has no value
+  nv <- function(parm){
+    is.null(parm) | length(parm) == 0
+  }
+
+  # Some parms have to be logical
+  makeLogical <- function(parm){
+    if (nv(parm)) parm <- FALSE else parm <- as.logical(parm)
+    if (is.na(parm)) parm <- FALSE
+    return(parm)
+  }
+
+  # Prevent errors having to do with inconsistent parameters
+  if (bsd$nSNP + bsd$nQTL >= bsd$segSites){
+    print("The number of segregating sites (segSites) has to be greater than the number of SNPs (nSNP) and the number of QTL (nQTL). segSites set 10% bigger than nSNP + nQTL")
+    bsd$segSites <- ceiling((bsd$nSNP + bsd$nQTL) * 1.1)
+  }
+
+  bsd$quickHaplo <- makeLogical(bsd$quickHaplo)
+
+  # Genetic architecture defaults
+  if (nv(bsd$meanDD)) bsd$meanDD <- 0
+  if (nv(bsd$varDD)) bsd$varDD <- 0
+  if (nv(bsd$relAA)) bsd$relAA <- 0
+
+  # Check that these vectors are of the right length
+  rightLength <- function(objName) length(get(objName, bsd)) == bsd$nStages
+  vecNames <- c("stageNames", "nReps", "nLocs", "errVars",
+                "seedNeeded", "seedProduced")
+  rl <- sapply(vecNames, rightLength)
+  if (any(!rl)){
+    stop(paste("These vectors do not have the right length:",
+               paste(vecNames[!rl], collapse=" ")))
+  }
+
+  # Defaults for GxE variance
+  if (any(nv(bsd$gxyVar), nv(bsd$gxlVar), nv(bsd$gxyxlVar))){
+    if (!nv(bsd$gxeVar)){
+      if (nv(bsd$gxyVar)) bsd$gxyVar <- bsd$gxeVar / 3
+      if (nv(bsd$gxlVar)) bsd$gxlVar <- bsd$gxeVar / 3
+      if (nv(bsd$gxyxlVar)) bsd$gxyxlVar <- bsd$gxeVar / 3
+    } else{
+      if (nv(bsd$gxyVar)) bsd$gxyVar <- 0
+      if (nv(bsd$gxlVar)) bsd$gxlVar <- 0
+      if (nv(bsd$gxyxlVar)) bsd$gxyxlVar <- 0
+    }
+  }
+
+  # Make sure everything has names
+  names(bsd$nReps) <- names(bsd$nLocs) <- names(bsd$errVars) <-
+    names(bsd$seedNeeded) <- names(bsd$seedProduced)<- bsd$stageNames
+
+  return(bsd)
 }

@@ -6,9 +6,10 @@
 #'
 #' @param nToSelect The number of IDs to return that have the highest BLUPs
 #' @param bsd The breeding scheme data list
-#' @return List with entries vector of variety IDs selected and updated bsd
-#' @details Accesses all data in phenoRecords to pick the highest among
-#' candidates with enough seed inventory.
+#' @return Data.frame with pedigree ccMat-based optimal contributions
+#' @details Accesses phenoRecords to predict GEBVs among breeding population
+#' then calculates optimal contributions with those GEBVs and a pedigree-based
+#' coefficient of coancestry matrix.
 #'
 #' @examples
 #' optCont <- selectParents(nToSelect, bsd)]

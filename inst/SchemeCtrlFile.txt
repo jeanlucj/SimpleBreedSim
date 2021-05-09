@@ -37,14 +37,3 @@ nBreedPopProg
 # Number of breeding population progeny each cycle
 nStartVarietyCand
 400
-
-# Selection Functions
-# Name of function to advance individuals from one stage to the next
-# selCritIID assumes no information sharing between individuals
-# selCritGRM calculates an additive GRM using markers
-selCritPipeAdv
-selCritIID
-
-# Name of function to select individuals to be parents for the next cycle
-selCritPopImprov
-selCritIID
